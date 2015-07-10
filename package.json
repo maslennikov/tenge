@@ -1,0 +1,38 @@
+{
+  "name": "tenge",
+  "version": "0.1.0",
+  "description": "Thin convenience layer on top of mongojs for MongoDB operations in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "test": "NODE_ENV=test mocha --full-trace 'spec/**/*.spec.js'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maslennikov/tenge.git"
+  },
+  "keywords": [
+    "mongodb",
+    "mongojs",
+    "model",
+    "nosql",
+    "node.js",
+    "nodejs"
+  ],
+  "author": "Alexey Maslennikov",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/maslennikov/tenge/issues"
+  },
+  "homepage": "https://github.com/maslennikov/tenge",
+  "dependencies": {
+    "flowy": "^0.4.0",
+    "lodash": "^3.10.0",
+    "mongojs": "^1.0.2",
+    "shortid": "^2.2.2"
+  },
+  "devDependencies": {
+    "chai": "^3.0.0",
+    "chai-as-promised": "^5.1.0",
+    "mocha": "^2.2.5"
+  }
+}
