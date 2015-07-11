@@ -3,13 +3,13 @@
 var expect = require('chai').expect;
 var _ = require('lodash');
 var F = require('flowy');
-var config = require('../config/environment');
-var Model = require('./model.js');
+var config = require('./config.js');
+var Tenge = require('../index.js');
 var shortid = require('shortid');
 
 
-describe('Base Model', function() {
-    Model.connect(config.mongo);
+describe('Tenge', function() {
+    Tenge.connect(config.mongo);
     var model;
     var bobAndFriends = [
         {name: 'Bob', age: 17}, {name: 'Alice', age: 17},
@@ -18,11 +18,11 @@ describe('Base Model', function() {
     ];
 
     before(function() {
-        expect(function() {new Model()}).to.throw(/No collection/);
+        expect(function() {new Tenge()}).to.throw(/No collection/);
     });
 
     beforeEach(function(done) {
-        model = new Model({collection: 'dummy'});
+        model = new Tenge({collection: 'dummy'});
         expect(model._getDb()).to.exist;
         expect(model._getCollection()).to.exist;
 

@@ -1,5 +1,5 @@
 /**
- * Base class for all models. Hides connection details under the hood.
+ * Base class for all entity models. Hides connection details under the hood.
  *
  * All methods receiving a callback get it in a form of `function(err, data)`;
  * in this case the `@returns` docstring applies to the callback `data` arg.
@@ -12,14 +12,14 @@ var shortid = require('shortid');
 var F = require('flowy');
 var _ = require('lodash');
 
-module.exports = Model;
+module.exports = Tenge;
 
 /**
- * Base model to be inherited in the app
+ * Base model to be inherited in the app by each entity
  *
  * @param params.collection name of the collection to be associated with
  */
-function Model(params) {
+function Tenge(params) {
     this._params = params || {};
     this._hooks = {
         before: {insert: []/*, update: [], remove: []*/},
@@ -38,21 +38,21 @@ function Model(params) {
 /**
  * Sets up the database singleton instance with given connection config
  */
-Model.connect = function(config) {
-    Model.prototype._db = mongojs(config.uri);
+Tenge.connect = function(config) {
+    Tenge.prototype._db = mongojs(config.uri);
 };
 
 /**
  * Accessing the DB app-wide singleton
  */
-Model.prototype._getDb = function() {
+Tenge.prototype._getDb = function() {
     if (!this._db) {
-        throw new Error('Model has no DB instance: please call connect() first');
+        throw new Error('Tenge has no DB instance: please call connect() first');
     }
     return this._db;
 };
 
-Model.prototype._getCollection = function() {
+Tenge.prototype._getCollection = function() {
     if (!this._params.collection) {
         throw new Error('No collection name provided');
     }
@@ -63,7 +63,7 @@ Model.prototype._getCollection = function() {
 /**
  * Converts id string into the mongo ObjectId
  */
-Model.prototype.OID = function(id) {
+Tenge.prototype.OID = function(id) {
     return OID(id);
 };
 
@@ -76,7 +76,7 @@ Model.prototype.OID = function(id) {
  * @param params.query mongo query object
  * @returns {query: {...}}
  */
-Model.prototype._makeQuery = function(params) {
+Tenge.prototype._makeQuery = function(params) {
     var self = this;
     var $$ = _.get(params, 'query.$$', {});
     var query = _.omit(_.get(params, 'query'), '$$');
@@ -102,7 +102,7 @@ Model.prototype._makeQuery = function(params) {
  * @param $$ the whole `$$` object
  * @see `_makeQuery()`
  */
-Model.prototype._makeQueryTransformers = {
+Tenge.prototype._makeQueryTransformers = {
     id: function(val) {
         return {id: val};
     },
@@ -121,7 +121,7 @@ Model.prototype._makeQueryTransformers = {
  *
  * Important: passed docs will be modified in-place to contain _id
  */
-Model.prototype.insert = function(params, cb) {
+Tenge.prototype.insert = function(params, cb) {
     var self = this;
     F(function() {
         self._runHooksEach(self._hooks.before.insert, params.doc, this.slot());
@@ -148,7 +148,7 @@ Model.prototype.insert = function(params, cb) {
  * @returns a cursor to the selected documents (synchronously) result of
  * `toArray()` on the cursor via callback.
  */
-Model.prototype.find = function(params, cb) {
+Tenge.prototype.find = function(params, cb) {
     params = _.defaults(this._makeQuery(params), params, {fields: {}});
     var cursor = this._getCollection().find(params.query, params.fields);
 
@@ -164,7 +164,7 @@ Model.prototype.find = function(params, cb) {
  *
  * Params same as `find()` has
  */
-Model.prototype.findOne = function(params, cb) {
+Tenge.prototype.findOne = function(params, cb) {
     this.find(params).next(cb);
 };
 
@@ -174,7 +174,7 @@ Model.prototype.findOne = function(params, cb) {
  *
  * @param [params.query] mongo query object
  */
-Model.prototype.count = function(params, cb) {
+Tenge.prototype.count = function(params, cb) {
     this.find(params).count(cb);
 };
 
@@ -186,7 +186,7 @@ Model.prototype.count = function(params, cb) {
  * @param [params.limit] cursor limit spec
  * @param [params.skip] cursor skip spec
  */
-Model.prototype.size = function(params, cb) {
+Tenge.prototype.size = function(params, cb) {
     this.find(params).size(cb);
 };
 
@@ -203,7 +203,7 @@ Model.prototype.size = function(params, cb) {
  * Important: if no document for was found, it will be considered an error; if
  * this behavior is not desirable, use `updateAll()`.
  */
-Model.prototype.updateOne = function(params, cb) {
+Tenge.prototype.updateOne = function(params, cb) {
     var self = this;
     params = _.defaults(this._makeQuery(params), params);
     params = _.extend(params, params.opts, {new: true});
@@ -229,7 +229,7 @@ Model.prototype.updateOne = function(params, cb) {
  * @param [params.opts] mongo update operation options (upsert)
  * @returns a list of updated objects (may be empty)
  */
-Model.prototype.updateAll = function(params, cb) {
+Tenge.prototype.updateAll = function(params, cb) {
     var self = this;
     params = _.defaults(this._makeQuery(params), params, {sort: {_id: 1}});
     params.opts = _.extend({}, params.opts, {multi: true});
@@ -271,7 +271,7 @@ Model.prototype.updateAll = function(params, cb) {
  *
  * For params format, see the doc for corresponding action.
  */
-Model.prototype.before = function(action, handler) {
+Tenge.prototype.before = function(action, handler) {
     var hooks = this._hooks.before[action];
     if (!hooks) {
         throw new Error('Before-hook for action not supported: ' + action);
@@ -291,7 +291,7 @@ Model.prototype.before = function(action, handler) {
  *
  * For params format, see the doc for corresponding action.
  */
-Model.prototype.after = function(action, handler) {
+Tenge.prototype.after = function(action, handler) {
     var hooks = this._hooks.after[action];
     if (!hooks) {
         throw new Error('After-hook for action not supported: ' + action);
@@ -305,7 +305,7 @@ Model.prototype.after = function(action, handler) {
  *
  * @returns passed and potentially modified params onject via callback
  */
-Model.prototype._runHooks = function(hooks, params, cb) {
+Tenge.prototype._runHooks = function(hooks, params, cb) {
     var chain = F.when(null);
     _.each(hooks, function(hook) {
         chain = chain.then(function() {
@@ -319,7 +319,7 @@ Model.prototype._runHooks = function(hooks, params, cb) {
  * Will trigger given hooks for each element in `docOrDocs` if it's an array;
  * otherwise it'll behave like _runHooks()
  */
-Model.prototype._runHooksEach = function(hooks, docOrDocs, cb) {
+Tenge.prototype._runHooksEach = function(hooks, docOrDocs, cb) {
     var self = this;
     F(function() {
         if (_.isArray(docOrDocs)) {
