@@ -29,7 +29,7 @@ describe('Tenge', function() {
         F(function() {
             model._getCollection().remove({}, this.slot());
         }, function(err) {
-            model.insert({doc: bobAndFriends}, this.slot());
+            model.insert({docs: bobAndFriends}, this.slot());
         }, done);
     });
 
@@ -93,8 +93,8 @@ describe('Tenge', function() {
 
         }, function(err, count) {
             this.pass(count);
-            model.insert({doc: doc}, this.slot());
-            model.insert({doc: docs}, this.slot());
+            model.insert({docs: doc}, this.slot());
+            model.insert({docs: docs}, this.slot());
 
         }, function(err, oldcnt, newDoc, newDocs) {
             //original docs were modified in-place
@@ -124,7 +124,7 @@ describe('Tenge', function() {
             doc.modifiedAfter = true;
             next();
         });
-        model.insert({doc: {name: 'Hans'}}, function(err, doc) {
+        model.insert({docs: {name: 'Hans'}}, function(err, doc) {
             expect(err).not.to.exist;
             expect(doc).to.have.property('name', 'Hans-Dieter');
             expect(doc).to.have.property('modifiedAfter', true);
@@ -252,7 +252,7 @@ describe('Tenge', function() {
 
     it('should create custom id', function(done) {
         F(function() {
-            model.insert({doc: [
+            model.insert({docs: [
                 {bob: 'marley'}, {jimi: 'hendrix'}, {carlos: 'santana'}
             ]}, this.slot());
 
@@ -265,5 +265,11 @@ describe('Tenge', function() {
             this.pass(null);
 
         }, done);
+    });
+
+    it ('should produce correct error messages', function() {
+        expect(model._assert(true, 'not occurs')).to.not.exist;
+        expect(function(){model._assert(false, 'occurs')})
+            .to.throw('Tenge: occurs');
     });
 });

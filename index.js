@@ -46,16 +46,12 @@ Tenge.connect = function(config) {
  * Accessing the DB app-wide singleton
  */
 Tenge.prototype._getDb = function() {
-    if (!this._db) {
-        throw new Error('Tenge has no DB instance: please call connect() first');
-    }
+    this._assert(this._db, 'Not connected to database, use Tenge.connect())');
     return this._db;
 };
 
 Tenge.prototype._getCollection = function() {
-    if (!this._params.collection) {
-        throw new Error('No collection name provided');
-    }
+    this._assert(this._params.collection, 'No collection name provided');
     return this._collection ||
         (this._collection = this._getDb().collection(this._params.collection));
 };
@@ -83,10 +79,8 @@ Tenge.prototype._makeQuery = function(params) {
 
     _.transform($$, function(query, $$val, $$key, $$) {
         var transformer = self._makeQueryTransformers[$$key];
-        if (!transformer) {
-            throw new Error(
-                'No query transformer registered for "$$.' + $$key + '"');
-        }
+        self._assert(transformer,
+            'No query transformer registered for "$$.' + $$key + '"');
         _.merge(query, transformer($$val, query, $$));
     }, query);
 
@@ -116,7 +110,7 @@ Tenge.prototype._makeQueryTransformers = {
  *
  * Hooks: 'before' will get the whole `params.doc` object
  *
- * @param params.doc an array or a single object to be inserted
+ * @param params.docs an array or a single object to be inserted
  * @returns inserted object(s) having the proper id
  *
  * Important: passed docs will be modified in-place to contain _id
@@ -124,7 +118,8 @@ Tenge.prototype._makeQueryTransformers = {
 Tenge.prototype.insert = function(params, cb) {
     var self = this;
     F(function() {
-        self._runHooksEach(self._hooks.before.insert, params.doc, this.slot());
+        self._assert(params.docs, 'no docs specified for insert operation');
+        self._runHooksEach(self._hooks.before.insert, params.docs, this.slot());
     }, function(err, docOrDocs) {
         self._getCollection().insert(docOrDocs, this.slot());
     }, function(err, docOrDocs) {
@@ -211,7 +206,7 @@ Tenge.prototype.updateOne = function(params, cb) {
     F(function() {
         self._getCollection().findAndModify(params, this.slot());
     }, function(err, result) {
-        if (!result) throw new Error('Document does not exist');
+        self._assert(result, 'Document does not exist');
         this.pass(result);
     }, cb);
 };
@@ -273,9 +268,7 @@ Tenge.prototype.updateAll = function(params, cb) {
  */
 Tenge.prototype.before = function(action, handler) {
     var hooks = this._hooks.before[action];
-    if (!hooks) {
-        throw new Error('Before-hook for action not supported: ' + action);
-    }
+    this._assert(hooks, 'Before-hook for action not supported: ' + action);
     hooks.push(handler);
 };
 
@@ -293,10 +286,26 @@ Tenge.prototype.before = function(action, handler) {
  */
 Tenge.prototype.after = function(action, handler) {
     var hooks = this._hooks.after[action];
-    if (!hooks) {
-        throw new Error('After-hook for action not supported: ' + action);
-    }
+    this._assert(hooks, 'After-hook for action not supported: ' + action);
     hooks.push(handler);
+};
+
+/**
+ * Will trigger given hooks for each element in `docOrDocs` if it's an array;
+ * otherwise it'll behave like _runHooks()
+ */
+Tenge.prototype._runHooksEach = function(hooks, docOrDocs, cb) {
+    var self = this;
+    F(function() {
+        if (_.isArray(docOrDocs)) {
+            var nested = this.slotGroup();
+            _.each(docOrDocs, function(doc) {
+                self._runHooks(hooks, doc, nested.slot());
+            });
+        } else {
+            self._runHooks(hooks, docOrDocs, this.slot());
+        }
+    }, cb);
 };
 
 /**
@@ -316,19 +325,8 @@ Tenge.prototype._runHooks = function(hooks, params, cb) {
 };
 
 /**
- * Will trigger given hooks for each element in `docOrDocs` if it's an array;
- * otherwise it'll behave like _runHooks()
+ * Will throw an error with the specified message in the condition is falsy
  */
-Tenge.prototype._runHooksEach = function(hooks, docOrDocs, cb) {
-    var self = this;
-    F(function() {
-        if (_.isArray(docOrDocs)) {
-            var nested = this.slotGroup();
-            _.each(docOrDocs, function(doc) {
-                self._runHooks(hooks, doc, nested.slot());
-            });
-        } else {
-            self._runHooks(hooks, docOrDocs, this.slot());
-        }
-    }, cb);
+Tenge.prototype._assert = function(condition, message) {
+    if (!condition) throw new Error("Tenge: " + message);
 };
