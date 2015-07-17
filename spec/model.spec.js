@@ -132,6 +132,66 @@ describe('Tenge', function() {
         });
     });
 
+    it('should remove multiple documents', function(done) {
+        var params = {query: {age: 17}};
+
+        F(function() {
+            model.remove(params, this.slot());
+
+        }, function(err, removed) {
+            expect(removed).to.have.length.above(1);
+            expect(_.every(removed, {age: 17})).to.be.true;
+
+            //now check the actual state
+            model.find({}, this.slot());
+
+        }, function(err, all) {
+            expect(_.some(all, {age: 17})).to.be.false;
+            this.pass(null);
+
+        }, done);
+    });
+
+    it('should not remove not matched documents', function(done) {
+        var params = {query: {age: 177}};
+
+        F(function() {
+            model.remove(params, this.slot());
+
+        }, function(err, removed) {
+            expect(removed).to.be.empty;
+
+            //now check the actual state
+            model.find({}, this.slot());
+
+        }, function(err, all) {
+            expect(all).to.be.eql(bobAndFriends);
+            this.pass(null);
+
+        }, done);
+    });
+
+    it('should limit count of removed documents', function(done) {
+        var params = {query: {age: 17}, limit: 1};
+
+        F(function() {
+            model.remove(params, this.slot());
+
+        }, function(err, removed) {
+            expect(removed).to.have.length(1);
+            this.pass(removed);
+
+            //now check the actual state
+            model.find({}, this.slot());
+
+        }, function(err, removed, all) {
+            expect(_.some(all, params.query)).to.be.true;
+            expect(_.some(all, {_id: removed[0]._id})).to.be.false;
+            this.pass(null);
+
+        }, done);
+    });
+
     it('should update single doc properly', function(done) {
         var params = {
             query: {age: 17},

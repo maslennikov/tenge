@@ -186,6 +186,39 @@ Tenge.prototype.size = function(params, cb) {
 };
 
 /**
+ * A remove operation returning the cursor.
+ *
+ * All cursor stuff like `params.sort` will be applied to cursor when provided.
+ *
+ * @param [params.query] mongo query object
+ * @param [params.fields] specification of fields of removed objects to return
+ * @param [params.limit] limit the number of documents removed
+ *
+ * @returns an array of removed objects via callback
+ */
+Tenge.prototype.remove = function(params, cb) {
+    var self = this;
+    params = _.defaults(this._makeQuery(params), params);
+
+    F(function() {
+        //first getting the ids of objects to be updated
+        self.find(params, this.slot());
+
+    }, function(err, docs) {
+        this.pass(docs);
+        if (docs.length) {
+            var ids = _.pluck(docs, '_id');
+            self._getCollection().remove({_id: {$in: ids}}, this.slot());
+        }
+
+    }, function(err, docs, res) {
+        this.pass(docs);
+
+    }, cb);
+};
+
+
+/**
  * An update operation for a single document
  *
  * @param params.query mongo query object
