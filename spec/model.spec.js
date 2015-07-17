@@ -93,12 +93,13 @@ describe('Tenge', function() {
 
         }, function(err, count) {
             this.pass(count);
-            model.insert({docs: doc}, this.slot());
+            model.insert({doc: doc}, this.slot());
             model.insert({docs: docs}, this.slot());
 
         }, function(err, oldcnt, newDoc, newDocs) {
+            expect(newDoc).to.have.length(1);
             //original docs were modified in-place
-            expect(doc).to.be.eql(newDoc).and.to.have.property('_id');
+            expect(doc).to.be.eql(newDoc[0]).and.to.have.property('_id');
             expect(newDocs).to.have.length(docs.length);
             expect(_.every(newDocs, '_id'));
             expect(docs).to.be.eql(newDocs);
@@ -108,6 +109,30 @@ describe('Tenge', function() {
 
         }, function(err, oldcnt, newcnt) {
             expect(newcnt).to.equal(oldcnt + 1 + docs.length);
+            this.pass(null);
+
+        }, done);
+    });
+
+    it('should insert doc and docs', function(done) {
+        var doc = {name: 'Alex', age: 25};
+        var docs = [
+            {name: 'Mark', age: 40},
+            {name: 'David', age: 5}
+        ];
+
+        F(function() {
+            model.insert({doc: doc, docs: docs}, this.slot());
+
+        }, function(err, newDocs) {
+            expect(newDocs).to.have.length(docs.length + 1);
+            expect(_.every(newDocs, '_id'));
+
+            model.find({}, this.slot());
+
+        }, function(err, all) {
+            expect(_.intersection(docs.concat(doc)), all)
+                .to.have.length(docs.length + 1);
             this.pass(null);
 
         }, done);
@@ -124,10 +149,11 @@ describe('Tenge', function() {
             doc.modifiedAfter = true;
             next();
         });
-        model.insert({docs: {name: 'Hans'}}, function(err, doc) {
+        model.insert({doc: {name: 'Hans'}}, function(err, docs) {
             expect(err).not.to.exist;
-            expect(doc).to.have.property('name', 'Hans-Dieter');
-            expect(doc).to.have.property('modifiedAfter', true);
+            expect(docs).to.have.length(1);
+            expect(docs[0]).to.have.property('name', 'Hans-Dieter');
+            expect(docs[0]).to.have.property('modifiedAfter', true);
             done();
         });
     });

@@ -110,20 +110,25 @@ Tenge.prototype._makeQueryTransformers = {
  *
  * Hooks: 'before' will get the whole `params.doc` object
  *
- * @param params.docs an array or a single object to be inserted
- * @returns inserted object(s) having the proper id
+ * @param params.doc a single object to be inserted
+ * @param params.docs multiple objects to be inserted
+ * @returns array with inserted objects having the proper id
  *
- * Important: passed docs will be modified in-place to contain _id
+ * Important: passed docs will be modified in-place to contain id
  */
 Tenge.prototype.insert = function(params, cb) {
     var self = this;
     F(function() {
-        self._assert(params.docs, 'no docs specified for insert operation');
-        self._runHooksEach(self._hooks.before.insert, params.docs, this.slot());
-    }, function(err, docOrDocs) {
-        self._getCollection().insert(docOrDocs, this.slot());
-    }, function(err, docOrDocs) {
-        self._runHooksEach(self._hooks.after.insert, docOrDocs, this.slot());
+        var docs = _.compact([].concat(params.doc, params.docs));
+        self._assert(docs, 'no doc or docs specified for insert operation');
+        self._runHooksEach(self._hooks.before.insert, docs, this.slot());
+
+    }, function(err, docs) {
+        self._getCollection().insert(docs, this.slot());
+
+    }, function(err, docs) {
+        self._runHooksEach(self._hooks.after.insert, docs, this.slot());
+
     }, cb);
 };
 
