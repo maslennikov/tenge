@@ -139,14 +139,18 @@ describe('Tenge', function() {
     });
 
     it('should handle before- and after-insert hook', function(done) {
-        model.before('insert', function(doc, next) {
-            doc.name += '-Dieter';
+        model.before('insert', function(params, next) {
+            _.each(params.docs, function(doc) {
+                doc.name += '-Dieter';
+            });
             next();
         });
-        model.after('insert', function(doc, next) {
-            expect(doc).to.have.property('name', 'Hans-Dieter');
-            expect(doc).to.have.property('_id');
-            doc.modifiedAfter = true;
+        model.after('insert', function(params, next) {
+            _.each(params.docs, function(doc) {
+                expect(doc.name).to.match(/-Dieter$/);
+                expect(doc).to.have.property('_id');
+                doc.modifiedAfter = true;
+            });
             next();
         });
         model.insert({doc: {name: 'Hans'}}, function(err, docs) {
@@ -320,17 +324,16 @@ describe('Tenge', function() {
 
     it('should execute any hooks properly', function(done) {
         var hooks = [
-            function(params, next) {params.push(1); next()},
-            function(params, next) {params.push(2); next()},
-            function(params, next) {params.push(3); next('error')},
-            function(params, next) {params.push(4); next()}
+            function(params, next) {params.docs.push(1); next()},
+            function(params, next) {params.docs.push(2); next()},
+            function(params, next) {params.docs.push(3); next('error')},
+            function(params, next) {params.docs.push(4); next()}
         ];
 
-        var params = [];
-        model._runHooks(hooks, params, function(err, result) {
+        var docs = [];
+        model._runHooks(hooks, docs, function(err, result) {
             expect(err).to.equal('error');
-            expect(result).to.be.equal(params)
-                .and.to.be.eql([1,2,3]);
+            expect(result).to.be.equal(docs).and.to.be.eql([1,2,3]);
 
             done();
         });

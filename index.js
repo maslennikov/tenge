@@ -29,8 +29,11 @@ function Tenge(params) {
     // generating custom ids but not overwriting mongo native _id
     // TODO: use $setOnInsert to generate custom ids when upserting
     this._getCollection().ensureIndex({id: 1}, {unique: true});
-    this.before('insert', function(doc, next) {
-        doc.id = doc.id || shortid.generate();
+
+    this.before('insert', function(params, next) {
+        _.each(params.docs, function(doc) {
+            doc.id = doc.id || shortid.generate();
+        });
         next();
     });
 }
@@ -108,7 +111,8 @@ Tenge.prototype._makeQueryTransformers = {
 /**
  * A simple insert operation
  *
- * Hooks: 'before' will get the whole `params.doc` object
+ * Hooks: 'before' will get all objects to be inserted via `params.docs`
+ *        'after' will get all objects already inserted via `params.docs`
  *
  * @param params.doc a single object to be inserted
  * @param params.docs multiple objects to be inserted
@@ -121,13 +125,13 @@ Tenge.prototype.insert = function(params, cb) {
     F(function() {
         var docs = _.compact([].concat(params.doc, params.docs));
         self._assert(docs, 'no doc or docs specified for insert operation');
-        self._runHooksEach(self._hooks.before.insert, docs, this.slot());
+        self._runHooks(self._hooks.before.insert, docs, this.slot());
 
     }, function(err, docs) {
         self._getCollection().insert(docs, this.slot());
 
     }, function(err, docs) {
-        self._runHooksEach(self._hooks.after.insert, docs, this.slot());
+        self._runHooks(self._hooks.after.insert, docs, this.slot());
 
     }, cb);
 };
@@ -328,38 +332,23 @@ Tenge.prototype.after = function(action, handler) {
     hooks.push(handler);
 };
 
-/**
- * Will trigger given hooks for each element in `docOrDocs` if it's an array;
- * otherwise it'll behave like _runHooks()
- */
-Tenge.prototype._runHooksEach = function(hooks, docOrDocs, cb) {
-    var self = this;
-    F(function() {
-        if (_.isArray(docOrDocs)) {
-            var nested = this.slotGroup();
-            _.each(docOrDocs, function(doc) {
-                self._runHooks(hooks, doc, nested.slot());
-            });
-        } else {
-            self._runHooks(hooks, docOrDocs, this.slot());
-        }
-    }, cb);
-};
 
 /**
  * Will trigger the hook chain stopping its execution after the first error
  * passed to the `next`.
  *
- * @returns passed and potentially modified params onject via callback
+ * @param docs documents related to the hook operation
+ * @returns passed and potentially modified docs via callback
  */
-Tenge.prototype._runHooks = function(hooks, params, cb) {
+Tenge.prototype._runHooks = function(hooks, docs, cb) {
+    var params = {docs: docs};
     var chain = F.when(null);
     _.each(hooks, function(hook) {
         chain = chain.then(function() {
             hook(params, this.slot());
         });
     });
-    chain.anyway(function(err) { cb(err, params) });
+    chain.anyway(function(err) { cb(err, params.docs) });
 };
 
 /**
