@@ -20,6 +20,7 @@ module.exports = Tenge;
  * @param params.collection name of the collection to be associated with
  */
 function Tenge(params) {
+    var self = this;
     this._params = params || {};
     this._hooks = {
         before: {insert: []/*, update: [], remove: []*/},
@@ -32,7 +33,7 @@ function Tenge(params) {
 
     this.before('insert', function(params, next) {
         _.each(params.docs, function(doc) {
-            doc.id = doc.id || shortid.generate();
+            doc.id = doc.id || self.makeID();
         });
         next();
     });
@@ -60,10 +61,18 @@ Tenge.prototype._getCollection = function() {
 };
 
 /**
- * Converts id string into the mongo ObjectId
+ * Generates a new OID, or converts id string into the mongo ObjectId if arg is
+ * provided
  */
-Tenge.prototype.OID = function(id) {
+Tenge.prototype.makeOID = function(id) {
     return OID(id);
+};
+
+/**
+ * Generates url-friendly id
+ */
+Tenge.prototype.makeID = function() {
+    return shortid.generate();
 };
 
 /**
@@ -234,8 +243,9 @@ Tenge.prototype.remove = function(params, cb) {
  * @param params.(update|remove) mongo update object
  * @param [params.fields] specification of fields to return
  * @param [params.sort] specification of sorting to match the query
- * @param [params.opts] mongo update operation options (upsert)
- * @returns an updated object
+ * @param [params.upsert] whether upsert behavior is desired
+ *
+ * @returns an updated/upserted object
  *
  * Important: if no document for was found, it will be considered an error; if
  * this behavior is not desirable, use `updateAll()`.
@@ -243,13 +253,26 @@ Tenge.prototype.remove = function(params, cb) {
 Tenge.prototype.updateOne = function(params, cb) {
     var self = this;
     params = _.defaults(this._makeQuery(params), params);
-    params = _.extend(params, params.opts, {new: true});
+    params = _.extend(params, {new: true});
 
     F(function() {
-        self._getCollection().findAndModify(params, this.slot());
+        self._getCollection().findAndModify(params, this.slot('multi'));
+
     }, function(err, result) {
-        self._assert(result, 'Document does not exist');
-        this.pass(result);
+        var doc = result[0];
+        var lastErrorObject = result[1];
+
+        self._assert(
+            doc, params.upsert ? 'Upsert failed' : 'Document does not exist');
+
+        if (lastErrorObject.upserted) {
+            //todo: upsert hook
+        } else {
+            //todo: update hook
+        }
+
+        this.pass(doc);
+
     }, cb);
 };
 
@@ -263,34 +286,61 @@ Tenge.prototype.updateOne = function(params, cb) {
  * @param params.update mongo update object
  * @param [params.fields] specification of fields to return
  * @param [params.sort] specification of sorting to match the query
- * @param [params.opts] mongo update operation options (upsert)
- * @returns a list of updated objects (may be empty)
+ * @param [params.upsert] whether upsert behavior is desired
+ *
+ * @returns a list of updated/upserted documents (may be empty) via callback
  */
 Tenge.prototype.updateAll = function(params, cb) {
     var self = this;
     params = _.defaults(this._makeQuery(params), params, {sort: {_id: 1}});
-    params.opts = _.extend({}, params.opts, {multi: true});
 
     F(function() {
         //first getting the ids of objects to be updated
         self.find(_.extend({}, params, {fields: {_id: true}}), this.slot());
 
-    }, function(err, docs) {
-        var ids = _.pluck(docs, '_id');
+    }, function(err, docsToUpdate) {
+        var ids = _.pluck(docsToUpdate, '_id');
         this.pass(ids);
-        if (!docs.length) {
-            //continue normally, it may be an upsert
-            this.pass({});
+
+        if (!ids.length && params.upsert) {
+            //it will be an upsert
+            self._getCollection().update(
+                params.query,
+                params.update,
+                {upsert: true, multi: true},
+                this.slot());
         } else {
             self._getCollection().update(
-                {_id: {$in: ids}}, params.update, params.opts, this.slot());
+                {_id: {$in: ids}},
+                params.update,
+                {multi: true},
+                this.slot());
         }
 
-    }, function(err, ids, res) {
-        //here in res could be the ids of upserted docs
-        ids = ids.concat(_.compact(_.pluck(res.upserted, '_id')));
-        //we don't have in res updated docs, so fetch 'em all
-        self.find(_.extend({}, params, {query: {_id: {$in: ids}}}), this.slot());
+    }, function(err, updatedIds, result) {
+        this.pass(updatedIds.length);
+        var ids = updatedIds.length ? updatedIds : _.pluck(result.upserted, '_id');
+
+        if (ids.length) {
+            //fetching updated/upserted docs
+            self.find(
+                _.extend({}, params, {query: {_id: {$in: ids}}}),
+                this.slot());
+        } else {
+            //not abusing mongo with empty queries
+            this.pass([]);
+        }
+
+    }, function(err, updated, docs) {
+       if (!docs.length) {
+           this.pass([]);
+       } else if (updated) {
+           //todo update hook
+           this.pass(docs);
+       } else {
+           //todo upsert hook
+           this.pass(docs);
+       }
 
     }, cb);
 };

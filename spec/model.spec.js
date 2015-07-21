@@ -280,6 +280,69 @@ describe('Tenge', function() {
         }, done);
     });
 
+    it('should fail to updateOne an unexisting doc', function(done) {
+        F(function() {
+            model.updateOne({
+                query: {age: 150},
+                update: {$set: {hobby: 'levitate'}}
+            }, this.slot());
+        }, function(err, doc) {
+            expect(err).to.exist;
+            done();
+        });
+    });
+
+     it('should handle milti update of unexisting docs', function(done) {
+         F(function() {
+             model.updateAll({
+                 query: {age: 150},
+                 update: {$set: {hobby: 'levitate'}}
+             }, this.slot());
+         }, function(err, docs) {
+             expect(err).not.to.exist;
+             expect(docs).to.eql([]);
+             done();
+         });
+    });
+
+    it('should upsert an unexisting doc via updateOne', function(done) {
+        var params = {
+            query: {age: 150},
+            update: {$set: {hobby: 'levitate'}},
+            upsert: true
+        };
+
+         F(function() {
+             model.updateOne(params, this.slot());
+         }, function(err, doc) {
+             expect(err).not.to.exist;
+             expect(doc).to.include.keys(_.extend({}, params.query, params.update.$set));
+             expect(doc).to.have.property('_id');
+
+             done();
+         });
+    });
+
+    it('should upsert an unexisting doc via updateAll', function(done) {
+        var params = {
+            query: {age: 150},
+            update: {$set: {hobby: 'levitate'}},
+            upsert: true
+        };
+
+         F(function() {
+             model.updateAll(params, this.slot());
+         }, function(err, docs) {
+             expect(err).not.to.exist;
+             expect(docs).to.have.length(1);
+             expect(docs[0]).to.include.keys(_.extend({}, params.query, params.update.$set));
+             expect(docs[0]).to.have.property('_id');
+
+             done();
+         });
+    });
+
+
     it('shoud transform special queries', function() {
         var params, modified;
 
@@ -322,7 +385,7 @@ describe('Tenge', function() {
             id: {$in: params.query.$$.ids}}});
     });
 
-    it('should execute any hooks properly', function(done) {
+    it('should have hooks mechanism run properly', function(done) {
         var hooks = [
             function(params, next) {params.docs.push(1); next()},
             function(params, next) {params.docs.push(2); next()},
