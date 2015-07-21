@@ -23,8 +23,8 @@ function Tenge(params) {
     var self = this;
     this._params = params || {};
     this._hooks = {
-        before: {insert: []/*, update: [], remove: []*/},
-        after: {insert: [], /*update: [],*/ upsert: []/*, remove: []*/}
+        before: {insert: []/*, remove: []*/},
+        after: {insert: [], update: [], upsert: []/*, remove: []*/}
     };
 
     // generating custom ids but not overwriting mongo native _id
@@ -270,7 +270,7 @@ Tenge.prototype.updateOne = function(params, cb) {
         if (lastErrorObject.upserted) {
             self._runHooks(self._hooks.after.upsert, [doc], this.slot());
         } else {
-            //todo: update hook
+            self._runHooks(self._hooks.after.update, [doc], this.slot());
         }
 
     }, cb);
@@ -335,8 +335,7 @@ Tenge.prototype.updateAll = function(params, cb) {
        if (!docs.length) {
            this.pass([]);
        } else if (updated) {
-           //todo update hook
-           this.pass(docs);
+           self._runHooks(self._hooks.after.update, docs, this.slot());
        } else {
            self._runHooks(self._hooks.after.upsert, docs, this.slot());
        }
