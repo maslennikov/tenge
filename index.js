@@ -24,7 +24,7 @@ function Tenge(params) {
     this._params = params || {};
     this._hooks = {
         before: {insert: []/*, update: [], remove: []*/},
-        after: {insert: []/*, update: [], upsert: [], remove: []*/}
+        after: {insert: [], /*update: [],*/ upsert: []/*, remove: []*/}
     };
 
     // generating custom ids but not overwriting mongo native _id
@@ -245,7 +245,7 @@ Tenge.prototype.remove = function(params, cb) {
  * @param [params.sort] specification of sorting to match the query
  * @param [params.upsert] whether upsert behavior is desired
  *
- * @returns an updated/upserted object
+ * @returns an updated/upserted object via callback
  *
  * Important: if no document for was found, it will be considered an error; if
  * this behavior is not desirable, use `updateAll()`.
@@ -265,13 +265,13 @@ Tenge.prototype.updateOne = function(params, cb) {
         self._assert(
             doc, params.upsert ? 'Upsert failed' : 'Document does not exist');
 
+        this.pass(doc);
+
         if (lastErrorObject.upserted) {
-            //todo: upsert hook
+            self._runHooks(self._hooks.after.upsert, [doc], this.slot());
         } else {
             //todo: update hook
         }
-
-        this.pass(doc);
 
     }, cb);
 };
@@ -338,8 +338,7 @@ Tenge.prototype.updateAll = function(params, cb) {
            //todo update hook
            this.pass(docs);
        } else {
-           //todo upsert hook
-           this.pass(docs);
+           self._runHooks(self._hooks.after.upsert, docs, this.slot());
        }
 
     }, cb);

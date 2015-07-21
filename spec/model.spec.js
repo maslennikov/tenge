@@ -323,6 +323,59 @@ describe('Tenge', function() {
          });
     });
 
+    it('should trigger after-upsert hook from updateOne', function(done) {
+        model.after('upsert', function(params, next) {
+            _.each(params.docs, function(doc) {
+                doc.modifiedAfter = true;
+            });
+            next();
+        });
+
+        var params = {
+            query: {age: 150},
+            update: {$set: {hobby: 'levitate'}},
+            upsert: true
+        };
+
+         F(function() {
+             model.updateOne(params, this.slot());
+         }, function(err, doc) {
+             expect(err).not.to.exist;
+             expect(doc).to.include.keys(_.extend({}, params.query, params.update.$set));
+             expect(doc).to.have.property('modifiedAfter', true);
+             expect(doc).to.have.property('_id');
+
+             done();
+         });
+    });
+
+    it('should trigger after-upsert hook from updateAll', function(done) {
+        model.after('upsert', function(params, next) {
+            _.each(params.docs, function(doc) {
+                doc.modifiedAfter = true;
+            });
+            next();
+        });
+
+        var params = {
+            query: {age: 150},
+            update: {$set: {hobby: 'levitate'}},
+            upsert: true
+        };
+
+         F(function() {
+             model.updateAll(params, this.slot());
+         }, function(err, docs) {
+             expect(err).not.to.exist;
+             expect(docs).to.have.length(1);
+             expect(docs[0]).to.include.keys(_.extend({}, params.query, params.update.$set));
+             expect(docs[0]).to.have.property('modifiedAfter', true);
+             expect(docs[0]).to.have.property('_id');
+
+             done();
+         });
+    });
+
     it('should upsert an unexisting doc via updateAll', function(done) {
         var params = {
             query: {age: 150},
