@@ -222,6 +222,45 @@ describe('Tenge', function() {
         }, done);
     });
 
+    it('should handle before- and after-remove hook', function(done) {
+        var params = {query: {age: 17}, fields: {_id: true}};
+
+        model.before('remove', function(params, next) {
+            _.each(params.docs, function(doc) {
+                doc.modifiedBefore = true;
+            });
+            //checking that only modified docs will be applied to the remove OP
+            params.docs = params.docs.slice(0, 2);
+            next();
+        });
+
+        model.after('remove', function(params, next) {
+            _.each(params.docs, function(doc) {
+                doc.modifiedAfter = true;
+            });
+            next();
+        });
+
+
+        F(function() {
+            model.remove(params, this.slot());
+
+        }, function(err, removed) {
+            this.pass(removed);
+            model.find(params, this.slot());
+
+        }, function(err, removed, fetched) {
+            expect(err).not.to.exist;
+            expect(removed).to.have.length(2);
+            expect(_.every(removed, 'modifiedBefore'));
+            expect(_.every(removed, 'modifiedAfter'));
+
+            expect(fetched).to.have.length(1);
+            expect(_.some(removed, fetched[0])).to.be.false;
+            done();
+        });
+    });
+
     it('should update single doc properly', function(done) {
         var params = {
             query: {age: 17},

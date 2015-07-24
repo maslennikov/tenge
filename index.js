@@ -23,8 +23,8 @@ function Tenge(params) {
     var self = this;
     this._params = params || {};
     this._hooks = {
-        before: {insert: []/*, remove: []*/},
-        after: {insert: [], update: [], upsert: []/*, remove: []*/}
+        before: {insert: [], remove: []},
+        after: {insert: [], update: [], upsert: [], remove: []}
     };
 
     // generating custom ids but not overwriting mongo native _id
@@ -211,6 +211,7 @@ Tenge.prototype.size = function(params, cb) {
  * @param [params.query] mongo query object
  * @param [params.fields] specification of fields of removed objects to return
  * @param [params.limit] limit the number of documents removed
+ * @param [params.sort] sorting of results before fetching for the removal
  *
  * @returns an array of removed objects via callback
  */
@@ -223,14 +224,19 @@ Tenge.prototype.remove = function(params, cb) {
         self.find(params, this.slot());
 
     }, function(err, docs) {
+        self._runHooks(self._hooks.before.remove, docs, this.slot());
+
+    }, function(err, docs) {
         this.pass(docs);
         if (docs.length) {
             var ids = _.pluck(docs, '_id');
             self._getCollection().remove({_id: {$in: ids}}, this.slot());
         }
 
-    }, function(err, docs, res) {
-        this.pass(docs);
+    }, function(err, docs, result) {
+        //Warning: the actual count of docs removed during this operation may be
+        //different, it can be checked in result.nRemoved
+        self._runHooks(self._hooks.after.remove, docs, this.slot());
 
     }, cb);
 };
@@ -265,6 +271,8 @@ Tenge.prototype.updateOne = function(params, cb) {
         self._assert(
             doc, params.upsert ? 'Upsert failed' : 'Document does not exist');
 
+        //any changes to this object in after-hooks will be properly reflected
+        //in the final callback result
         this.pass(doc);
 
         if (lastErrorObject.upserted) {
