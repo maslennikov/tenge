@@ -15,20 +15,23 @@ var _ = require('lodash');
 module.exports = Tenge;
 
 /**
- * Base model to be inherited in the app by each entity
+ * Tenge is supposed to be inherited every time an interface to a new collection
+ * is desired.
+ *
+ * Important: before instantiating, call `Tenge.connect()`
  *
  * @param params.collection name of the collection to be associated with
  */
 function Tenge(params) {
     var self = this;
-    this._params = params || {};
+    this._params = _.extend({}, params);
     this._hooks = {
         before: {insert: [], remove: []},
         after: {insert: [], update: [], upsert: [], remove: []}
     };
 
-    // generating custom ids but not overwriting mongo native _id
-    // TODO: use $setOnInsert to generate custom ids when upserting
+    // Generating custom ids but not overwriting mongo native _id.
+    // Please remember that no ids will be automatically generated during upsert
     this._getCollection().ensureIndex({id: 1}, {unique: true});
 
     this.before('insert', function(params, next) {
@@ -41,9 +44,14 @@ function Tenge(params) {
 
 /**
  * Sets up the database singleton instance with given connection config
+ *
+ * @param params.uri should adhere to mongo connection string URI format
+ * @param [params.authMechanism] string describing auth mechanism, valid options
+ *                               'ScramSHA1', 'MongoCR' (default)
  */
-Tenge.connect = function(config) {
-    Tenge.prototype._db = mongojs(config.uri);
+Tenge.connect = function(params) {
+    Tenge.prototype._db = mongojs(
+        params.uri, [], _.pick(params, 'authMechanism'));
 };
 
 /**
@@ -79,7 +87,7 @@ Tenge.prototype.makeID = function() {
  * Amends the mongo query object with fields processed from `query.$$`.
  * Resulting query object won't contain the `$$` field.
  *
- * The `$$` object may contain only fields listed in `_makeQueryTransformers`.
+ * The `$$` object may contain only fields listed in `_queryTransformers`.
  *
  * @param params.query mongo query object
  * @returns {query: {...}}
@@ -90,7 +98,7 @@ Tenge.prototype._makeQuery = function(params) {
     var query = _.omit(_.get(params, 'query'), '$$');
 
     _.transform($$, function(query, $$val, $$key, $$) {
-        var transformer = self._makeQueryTransformers[$$key];
+        var transformer = self._queryTransformers[$$key];
         self._assert(transformer,
             'No query transformer registered for "$$.' + $$key + '"');
         _.merge(query, transformer($$val, query, $$));
@@ -108,7 +116,7 @@ Tenge.prototype._makeQuery = function(params) {
  * @param $$ the whole `$$` object
  * @see `_makeQuery()`
  */
-Tenge.prototype._makeQueryTransformers = {
+Tenge.prototype._queryTransformers = {
     id: function(val) {
         return {id: val};
     },
@@ -153,7 +161,7 @@ Tenge.prototype.insert = function(params, cb) {
  * @param [params.query] mongo query object
  * @param [params.fields] specification of fields ('projection') to return
  * @param [params.sort] cursor specification of sorting to match the query
- * @param [params.limit] cursor limit spec
+ * @param [params.limit] cursor limit spec; a falsy value is treated as no limit
  * @param [params.skip] cursor skip spec
  * @param [cb] optional callback; if not passed, the cursor will be immediately
  * returned

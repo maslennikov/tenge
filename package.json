@@ -27,7 +27,7 @@
   "dependencies": {
     "flowy": "^0.4.0",
     "lodash": "^3.10.0",
-    "mongojs": "^1.0.2",
+    "mongojs": "^1.2.1",
     "shortid": "^2.2.2"
   },
   "devDependencies": {
