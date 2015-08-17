@@ -29,17 +29,6 @@ function Tenge(params) {
         before: {insert: [], remove: []},
         after: {insert: [], update: [], upsert: [], remove: []}
     };
-
-    // Generating custom ids but not overwriting mongo native _id.
-    // Please remember that no ids will be automatically generated during upsert
-    this._getCollection().ensureIndex({id: 1}, {unique: true});
-
-    this.before('insert', function(params, next) {
-        _.each(params.docs, function(doc) {
-            doc.id = doc.id || self.makeID();
-        });
-        next();
-    });
 }
 
 /**
@@ -48,25 +37,93 @@ function Tenge(params) {
  * @param params.uri should adhere to mongo connection string URI format
  * @param [params.authMechanism] string describing auth mechanism, valid options
  *                               'ScramSHA1', 'MongoCR' (default)
+ *
+ * @see `Tenge._db()`
  */
 Tenge.connect = function(params) {
-    Tenge.prototype._db = mongojs(
-        params.uri, [], _.pick(params, 'authMechanism'));
+    var db = mongojs(params.uri, [], _.pick(params, 'authMechanism'));
+    Tenge._db = function() {
+        return db;
+    };
 };
 
 /**
- * Accessing the DB app-wide singleton
+ * Singleton closure storing current db connection. Will throw an error unless
+ * the `Tenge.connect()` called.
+ *
+ * @see `Tenge.connect()`
  */
-Tenge.prototype._getDb = function() {
-    this._assert(this._db, 'Not connected to database, use Tenge.connect())');
-    return this._db;
+Tenge._db = function(params) {
+    Tenge._assert(false, 'Not connected to database, use Tenge.connect())');
 };
 
-Tenge.prototype._getCollection = function() {
-    this._assert(this._params.collection, 'No collection name provided');
-    return this._collection ||
-        (this._collection = this._getDb().collection(this._params.collection));
+
+/**
+ * Accessing the DB app-wide singleton
+ * @see `Tenge._db()`
+ */
+Tenge.prototype._db = function() {
+    return Tenge._db();
 };
+
+/**
+ * Retrieving a mongojs Collection object. The result is passed to the callback.
+ *
+ * When accessing the collection for the first time, Tenge will ensure that the
+ * collection is properly initialized
+ */
+Tenge.prototype._collection = function(cb) {
+    var self = this;
+    var colname = this._params.collection;
+
+    this._assert(colname, 'No collection name provided');
+
+    F(function() {
+        if (self._col) {
+            this.pass(self._col);
+        } else {
+            self._initCollection(colname, this.slot());
+        }
+    }, function(err, col) {
+        self._col = col;
+        this.pass(col);
+    }, cb);
+};
+
+/**
+ * By default, the model will be set up for generating custom ids but not
+ * overwriting mongo native _id.
+ *
+ * Please remember that no ids will be automatically generated during upsert
+ *
+ * @param colname collection name
+ * @returns mongojs collection via callback
+ *
+ * @see `_collection()`
+ */
+Tenge.prototype._initCollection = function(colname, cb) {
+    var self = this;
+
+    F(function() {
+        //assuming that collection already exists, otherwise we will get a mongo
+        //error 'ns not found'
+        var col = self._db().collection(colname);
+        this.pass(col);
+        col.ensureIndex({id: 1}, {unique: true}, this.slot());
+
+    }, function(err, col) {
+        //index is created, now hanging up the hook
+        self.before('insert', function(params, next) {
+            _.each(params.docs, function(doc) {
+                doc.id = doc.id || self.makeID();
+            });
+            next();
+        });
+        this.pass(col);
+
+    }, cb);
+};
+
 
 /**
  * Generates a new OID, or converts id string into the mongo ObjectId if arg is
@@ -140,12 +197,13 @@ Tenge.prototype._queryTransformers = {
 Tenge.prototype.insert = function(params, cb) {
     var self = this;
     F(function() {
+        self._collection(this.slot());
         var docs = _.compact([].concat(params.doc, params.docs));
         self._assert(docs, 'no doc or docs specified for insert operation');
         self._runHooks(self._hooks.before.insert, docs, this.slot());
 
-    }, function(err, docs) {
-        self._getCollection().insert(docs, this.slot());
+    }, function(err, col, docs) {
+        col.insert(docs, this.slot());
 
     }, function(err, docs) {
         self._runHooks(self._hooks.after.insert, docs, this.slot());
@@ -166,18 +224,16 @@ Tenge.prototype.insert = function(params, cb) {
  * @param [cb] optional callback; if not passed, the cursor will be immediately
  * returned
  *
- * @returns a cursor to the selected documents (synchronously) result of
- * `toArray()` on the cursor via callback.
+ * @returns a result of `toArray()` on the cursor via callback.
  */
 Tenge.prototype.find = function(params, cb) {
-    params = _.defaults(this._makeQuery(params), params, {fields: {}});
-    var cursor = this._getCollection().find(params.query, params.fields);
+    var self = this;
 
-    if (params.sort) cursor.sort(params.sort);
-    if (params.skip) cursor.skip(params.skip);
-    cursor.limit(params.limit ? params.limit : null);
-
-    return cb ? cursor.toArray(cb) : cursor;
+    F(function() {
+        self._findCursor(params, this.slot());
+    }, function(err, cursor) {
+        cursor.toArray(this.slot());
+    }, cb);
 };
 
 /**
@@ -186,7 +242,13 @@ Tenge.prototype.find = function(params, cb) {
  * Params same as `find()` has
  */
 Tenge.prototype.findOne = function(params, cb) {
-    this.find(params).next(cb);
+    var self = this;
+
+    F(function() {
+        self._findCursor(params, this.slot());
+    }, function(err, cursor) {
+        cursor.next(this.slot());
+    }, cb);
 };
 
 
@@ -196,7 +258,13 @@ Tenge.prototype.findOne = function(params, cb) {
  * @param [params.query] mongo query object
  */
 Tenge.prototype.count = function(params, cb) {
-    this.find(params).count(cb);
+    var self = this;
+
+    F(function() {
+        self._findCursor(params, this.slot());
+    }, function(err, cursor) {
+        cursor.count(this.slot());
+    }, cb);
 };
 
 /**
@@ -208,7 +276,33 @@ Tenge.prototype.count = function(params, cb) {
  * @param [params.skip] cursor skip spec
  */
 Tenge.prototype.size = function(params, cb) {
-    this.find(params).size(cb);
+    var self = this;
+
+    F(function() {
+        self._findCursor(params, this.slot());
+    }, function(err, cursor) {
+        cursor.size(this.slot());
+    }, cb);
+};
+
+/**
+ * Base command for find operations
+ * @returns the cursor to matching resultset via callback.
+ * @see `find()`, `findOne()`, `count()`, `size()`
+ */
+Tenge.prototype._findCursor = function(params, cb) {
+    var self = this;
+    params = _.defaults(this._makeQuery(params), params, {fields: {}});
+
+    F(function() {
+        self._collection(this.slot());
+    }, function(err, col) {
+        var cursor = col.find(params.query, params.fields);
+        if (params.sort) cursor.sort(params.sort);
+        if (params.skip) cursor.skip(params.skip);
+        cursor.limit(params.limit ? params.limit : null);
+        this.pass(cursor);
+    }, cb);
 };
 
 /**
@@ -232,13 +326,14 @@ Tenge.prototype.remove = function(params, cb) {
         self.find(params, this.slot());
 
     }, function(err, docs) {
+        self._collection(this.slot());
         self._runHooks(self._hooks.before.remove, docs, this.slot());
 
-    }, function(err, docs) {
+    }, function(err, col, docs) {
         this.pass(docs);
         if (docs.length) {
             var ids = _.pluck(docs, '_id');
-            self._getCollection().remove({_id: {$in: ids}}, this.slot());
+            col.remove({_id: {$in: ids}}, this.slot());
         }
 
     }, function(err, docs, result) {
@@ -270,7 +365,10 @@ Tenge.prototype.updateOne = function(params, cb) {
     params = _.extend(params, {new: true});
 
     F(function() {
-        self._getCollection().findAndModify(params, this.slot('multi'));
+        self._collection(this.slot());
+
+    }, function(err, col) {
+        col.findAndModify(params, this.slot('multi'));
 
     }, function(err, result) {
         var doc = result[0];
@@ -311,22 +409,23 @@ Tenge.prototype.updateAll = function(params, cb) {
     params = _.defaults(this._makeQuery(params), params, {sort: {_id: 1}});
 
     F(function() {
+        self._collection(this.slot());
         //first getting the ids of objects to be updated
         self.find(_.extend({}, params, {fields: {_id: true}}), this.slot());
 
-    }, function(err, docsToUpdate) {
+    }, function(err, col, docsToUpdate) {
         var ids = _.pluck(docsToUpdate, '_id');
         this.pass(ids);
 
         if (!ids.length && params.upsert) {
             //it will be an upsert
-            self._getCollection().update(
+            col.update(
                 params.query,
                 params.update,
                 {upsert: true, multi: true},
                 this.slot());
         } else {
-            self._getCollection().update(
+            col.update(
                 {_id: {$in: ids}},
                 params.update,
                 {multi: true},
@@ -418,6 +517,10 @@ Tenge.prototype._runHooks = function(hooks, docs, cb) {
 /**
  * Will throw an error with the specified message in the condition is falsy
  */
-Tenge.prototype._assert = function(condition, message) {
+Tenge._assert = function(condition, message) {
     if (!condition) throw new Error("Tenge: " + message);
+};
+
+Tenge.prototype._assert = function() {
+    Tenge._assert.apply(null, arguments);
 };

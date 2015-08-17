@@ -9,7 +9,6 @@ var shortid = require('shortid');
 
 
 describe('Tenge', function() {
-    Tenge.connect(config.mongo);
     var model;
     var bobAndFriends = [
         {name: 'Bob', age: 17}, {name: 'Alice', age: 17},
@@ -18,19 +17,53 @@ describe('Tenge', function() {
     ];
 
     before(function() {
-        expect(function() {new Tenge()}).to.throw(/No collection/);
+        expect(Tenge._db).to.throw(/Not connected/);
+        Tenge.connect(config.mongo);
+        expect(Tenge._db()).to.exist;
     });
 
     beforeEach(function(done) {
-        model = new Tenge({collection: 'dummy'});
-        expect(model._getDb()).to.exist;
-        expect(model._getCollection()).to.exist;
+        var modelOpts = {collection: 'unittests'};
+        // model = new Tenge({collection: 'unittests'});
+        // expect(model._getDb()).to.exist;
+        // expect(model._getCollection()).to.exist;
 
         F(function() {
-            model._getCollection().remove({}, this.slot());
+            Tenge._db().getCollectionNames(this.slot());
+
+        }, function(err, collections) {
+            if (collections.indexOf(modelOpts.collection) < 0) {
+                this.pass();
+            } else {
+                Tenge._db().collection(modelOpts.collection).drop(this.slot());
+            }
+
         }, function(err) {
+            Tenge._db().createCollection('unittests', this.slot());
+
+
+        }, function(err) {
+            //checking how constructor creates index
+            model = new Tenge(modelOpts);
+            model._collection(this.slot());
+
+        }, function(err, col) {
+            col.getIndexes(this.slot());
+
+        },  function(err, indexes) {
+            expect(_.find(indexes, {key: {id: 1}, unique: true})).to.exist;
             model.insert({docs: bobAndFriends}, this.slot());
         }, done);
+    });
+
+    it('should fail to do collection operations without collection name', function(done) {
+        F(function() {
+            var m = new Tenge({});
+            m._collection(this.slot());
+        }, function(err, col) {
+            expect(err).to.match(/No collection/);
+            done();
+        });
     });
 
     it('should adhere to limits properly', function(done) {
@@ -105,7 +138,7 @@ describe('Tenge', function() {
             expect(docs).to.be.eql(newDocs);
 
             this.pass(oldcnt);
-            model.find().count(this.slot());
+            model.count({}, this.slot());
 
         }, function(err, oldcnt, newcnt) {
             expect(newcnt).to.equal(oldcnt + 1 + docs.length);
@@ -557,6 +590,27 @@ describe('Tenge', function() {
             this.pass(null);
 
         }, done);
+    });
+
+    it('should not allow duplicate custom ids', function(done) {
+        F(function() {
+            var id = 'fake_id';
+            var docs = [
+                {bob: 'marley'}, {jimi: 'hendrix'}, {carlos: 'santana'}
+            ].map(function(doc) {
+                return _.extend(doc, {id: id});
+            });
+
+            model.insert({docs: docs}, this.slot());
+        }, function(err, docs) {
+            expect(err).to.exist;
+
+            model.count({query: {id: 'fake_id'}}, function(err, count) {
+                //it should have been a duplicate key error
+                expect(count).to.equal(1);
+                done(err);
+            });
+        });
     });
 
     it ('should produce correct error messages', function() {
