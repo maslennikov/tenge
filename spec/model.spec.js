@@ -24,9 +24,6 @@ describe('Tenge', function() {
 
     beforeEach(function(done) {
         var modelOpts = {collection: 'unittests'};
-        // model = new Tenge({collection: 'unittests'});
-        // expect(model._getDb()).to.exist;
-        // expect(model._getCollection()).to.exist;
 
         F(function() {
             Tenge._db().getCollectionNames(this.slot());

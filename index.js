@@ -140,47 +140,43 @@ Tenge.prototype.makeID = function() {
     return shortid.generate();
 };
 
+
 /**
- * Amends the mongo query object with fields processed from `query.$$`.
- * Resulting query object won't contain the `$$` field.
+ * Registering before-hooks for actions like 'insert', 'update'.
  *
- * The `$$` object may contain only fields listed in `_queryTransformers`.
+ * Hook is a `function(params, next)` receiving params appropriate to the
+ * particular action, and next is a callback `function([err])` acting like in
+ * express middleware.
  *
- * @param params.query mongo query object
- * @returns {query: {...}}
+ * Hooks are welcome to modify the params. Every hook will get the same params
+ * object.
+ *
+ * For params format, see the doc for corresponding action.
  */
-Tenge.prototype._makeQuery = function(params) {
-    var self = this;
-    var $$ = _.get(params, 'query.$$', {});
-    var query = _.omit(_.get(params, 'query'), '$$');
-
-    _.transform($$, function(query, $$val, $$key, $$) {
-        var transformer = self._queryTransformers[$$key];
-        self._assert(transformer,
-            'No query transformer registered for "$$.' + $$key + '"');
-        _.merge(query, transformer($$val, query, $$));
-    }, query);
-
-    return {query: query};
+Tenge.prototype.before = function(action, handler) {
+    var hooks = this._hooks.before[action];
+    this._assert(hooks, 'Before-hook for action not supported: ' + action);
+    hooks.push(handler);
 };
 
 /**
- * Each transformer funciton should return an object for existing query to be
- * merged with and will be passed the following params:
+ * Registering after-hooks for actions like 'insert', 'update'.
  *
- * @param val value of `$$` under the corresponding key
- * @param query the query object to be merged into
- * @param $$ the whole `$$` object
- * @see `_makeQuery()`
+ * Hook is a `function(params, next)` receiving params appropriate to the
+ * particular action, and next is a callback `function([err])` acting like in
+ * express middleware.
+ *
+ * Hooks are welcome to modify the params. Every hook will get the same params
+ * object.
+ *
+ * For params format, see the doc for corresponding action.
  */
-Tenge.prototype._queryTransformers = {
-    id: function(val) {
-        return {id: val};
-    },
-    ids: function(val) {
-        return {id: {$in: _.compact(val)}};
-    }
+Tenge.prototype.after = function(action, handler) {
+    var hooks = this._hooks.after[action];
+    this._assert(hooks, 'After-hook for action not supported: ' + action);
+    hooks.push(handler);
 };
+
 
 /**
  * A simple insert operation
@@ -460,39 +456,45 @@ Tenge.prototype.updateAll = function(params, cb) {
 
 
 /**
- * Registering before-hooks for actions like 'insert', 'update'.
+ * Amends the mongo query object with fields processed from `query.$$`.
+ * Resulting query object won't contain the `$$` field.
  *
- * Hook is a `function(params, next)` receiving params appropriate to the
- * particular action, and next is a callback `function([err])` acting like in
- * express middleware.
+ * The `$$` object may contain only fields listed in `_queryTransformers`.
  *
- * Hooks are welcome to modify the params. Every hook will get the same params
- * object.
- *
- * For params format, see the doc for corresponding action.
+ * @param params.query mongo query object
+ * @returns {query: {...}}
  */
-Tenge.prototype.before = function(action, handler) {
-    var hooks = this._hooks.before[action];
-    this._assert(hooks, 'Before-hook for action not supported: ' + action);
-    hooks.push(handler);
+Tenge.prototype._makeQuery = function(params) {
+    var self = this;
+    var $$ = _.get(params, 'query.$$', {});
+    var query = _.omit(_.get(params, 'query'), '$$');
+
+    _.transform($$, function(query, $$val, $$key, $$) {
+        var transformer = self._queryTransformers[$$key];
+        self._assert(transformer,
+            'No query transformer registered for "$$.' + $$key + '"');
+        _.merge(query, transformer($$val, query, $$));
+    }, query);
+
+    return {query: query};
 };
 
 /**
- * Registering after-hooks for actions like 'insert', 'update'.
+ * Each transformer funciton should return an object for existing query to be
+ * merged with and will be passed the following params:
  *
- * Hook is a `function(params, next)` receiving params appropriate to the
- * particular action, and next is a callback `function([err])` acting like in
- * express middleware.
- *
- * Hooks are welcome to modify the params. Every hook will get the same params
- * object.
- *
- * For params format, see the doc for corresponding action.
+ * @param val value of `$$` under the corresponding key
+ * @param query the query object to be merged into
+ * @param $$ the whole `$$` object
+ * @see `_makeQuery()`
  */
-Tenge.prototype.after = function(action, handler) {
-    var hooks = this._hooks.after[action];
-    this._assert(hooks, 'After-hook for action not supported: ' + action);
-    hooks.push(handler);
+Tenge.prototype._queryTransformers = {
+    id: function(val) {
+        return {id: val};
+    },
+    ids: function(val) {
+        return {id: {$in: _.compact(val)}};
+    }
 };
 
 
