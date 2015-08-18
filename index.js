@@ -494,6 +494,12 @@ Tenge.prototype._queryTransformers = {
     },
     ids: function(val) {
         return {id: {$in: _.compact(val)}};
+    },
+    _id: function(val) {
+        return {_id: Tenge.makeOID(val)};
+    },
+    _ids: function(val) {
+        return {_id: {$in: _.compact(_.map(val, Tenge.makeOID))}};
     }
 };
 
