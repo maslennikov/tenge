@@ -1,4 +1,11 @@
 # Tenge
+
+[![build status](https://secure.travis-ci.org/maslennikov/tenge.png)
+](http://travis-ci.org/maslennikov/tenge)
+&nbsp;
+[![npm version](http://img.shields.io/npm/v/tenge.svg?style=flat)
+](https://npmjs.org/package/tenge "View on npm")
+
 Thin convenience layer on top of mongojs for MongoDB operations in Node.js
 
 General behavior tends to stay close to "native" MongoDB interface libraries
