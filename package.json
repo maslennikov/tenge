@@ -1,6 +1,6 @@
 {
   "name": "tenge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Thin convenience layer on top of mongojs for MongoDB operations in Node.js",
   "main": "index.js",
   "scripts": {
