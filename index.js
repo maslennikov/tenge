@@ -181,8 +181,8 @@ Tenge.prototype.after = function(action, handler) {
 /**
  * A simple insert operation
  *
- * Hooks: 'before' will get all objects to be inserted via `params.docs`
- *        'after' will get all objects already inserted via `params.docs`
+ * Hooks: 'before insert' will get all objects to be inserted via `params.docs`
+ *        'after insert' will get all objects already inserted via `params.docs`
  *
  * @param params.doc a single object to be inserted
  * @param params.docs multiple objects to be inserted
@@ -208,9 +208,10 @@ Tenge.prototype.insert = function(params, cb) {
 };
 
 /**
- * A find operation returning the cursor.
+ * A simple find operation
  *
- * All cursor stuff like `params.sort` will be applied to cursor when provided.
+ * All mongo cursor stuff like `params.sort` will be applied to cursor when
+ * provided, before the results are fetched into the callback via `toArray()`.
  *
  * @param [params.query] mongo query object
  * @param [params.fields] specification of fields ('projection') to return
@@ -302,14 +303,16 @@ Tenge.prototype._findCursor = function(params, cb) {
 };
 
 /**
- * A remove operation returning the cursor.
+ * Removes documents matching the query filters.
  *
- * All cursor stuff like `params.sort` will be applied to cursor when provided.
+ * Hooks: 'before remove' will get all objects to be removed via `params.docs`
+ *        'after remove' will get objects removed via `params.docs`
  *
  * @param [params.query] mongo query object
  * @param [params.fields] specification of fields of removed objects to return
- * @param [params.limit] limit the number of documents removed
  * @param [params.sort] sorting of results before fetching for the removal
+ * @param [params.limit] limit the number of documents removed
+ * @param [params.skip] cursor skip spec
  *
  * @returns an array of removed objects via callback
  */
@@ -343,6 +346,9 @@ Tenge.prototype.remove = function(params, cb) {
 
 /**
  * An update operation for a single document
+ *
+ * Hooks: 'after update' will get object updated via `params.docs` array
+ *        'after upsert' will get object upserted via `params.docs` array
  *
  * @param params.query mongo query object
  * @param params.(update|remove) mongo update object
